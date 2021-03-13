@@ -1,0 +1,19 @@
+# ---------
+# [ Files ]
+# ---------
+
+# Code::Blocks
+**/*.cbp
+**/*.depend
+**/*.layout
+
+# Compiler
+**/*.o
+
+# ---------------
+# [ Directories ]
+# ---------------
+
+# Binaries
+**/bin/
+obj/
