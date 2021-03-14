@@ -1,14 +1,20 @@
+#include <list>
+#include <mutex>
+#include <stack>
 #include <thread>
 #include <string>
 #include <vector>
+#include <memory>
 #include <numeric>
 #include <iostream>
+#include <algorithm>
+#include <exception>
 
 using namespace std;
 
 /*
  * Примеры из книжки.
- * Для работы нужно указать флаг для компилятора "-pthreads".
+ * Для работы нужно указать флаг для компилятора "-pthread".
  * Инструкция для Code::Blocks здесь -
  *   https://askubuntu.com/questions/568068/multithreading-in-codeblocks
  *
@@ -399,6 +405,198 @@ void run29()
     cout << "result is " << result << endl;
 }
 /* Конец листинга 2.9 */
+
+
+
+/* Листинг 3.1 (стр 71) */
+list<int> some_list;
+mutex some_mutex;
+
+void add_to_list(int new_value)
+{
+    lock_guard<mutex> guard(some_mutex);
+    some_list.push_back(new_value);
+}
+
+bool list_contains(int value_to_find)
+{
+    lock_guard<mutex> guard(some_mutex);
+    return find(some_list.begin(), some_list.end(), value_to_find) != some_list.end();
+}
+
+// Запуск листинга
+void run31()
+{
+    add_to_list(3);
+    add_to_list(4);
+    add_to_list(5);
+
+    cout << "Is list contains 6? " << (list_contains(6) ? "yes" : "no") << endl;
+    cout << "Is list contains 5? " << (list_contains(5) ? "yes" : "no") << endl;
+}
+/* Конец листинга 3.1 */
+
+
+
+/* Листинг 3.2 (стр 72) */
+class some_data
+{
+    int a;
+    string b;
+public:
+    void do_something()
+    {
+        cout << "instance of some_data do_something()" << endl;
+    }
+};
+
+class data_wrapper
+{
+private:
+    some_data data;
+    mutex m;
+public:
+    template<typename Function>
+    void process_data(Function func)
+    {
+        lock_guard<mutex> l(m);
+        func(data);
+    }
+};
+
+some_data* unprotected;
+void malicious_function(some_data& protected_data)
+{
+    unprotected = &protected_data;
+}
+
+data_wrapper x;
+// Запуск листинга
+void foo()
+{
+    x.process_data(malicious_function);
+    unprotected->do_something();
+}
+/* Конец листинга 3.2 */
+
+
+
+/* Листинг 3.3 (стр 74)
+ * Это просто интерфейс без реализованных методов, смысла нет его делать.
+ * Код добавляю, чтобы показать, что он хотя бы собирается.
+ */
+template<typename T, typename Container>
+class stack33
+{
+public:
+    explicit stack33(const Container&);
+    explicit stack33(Container&& = Container());
+    template<class Alloc> explicit stack33(const Alloc&);
+    template<class Alloc> stack33(const Container&, const Alloc&);
+    template<class Alloc> stack33(Container&&, const Alloc&);
+    template<class Alloc> stack33(stack33&&, const Alloc&);
+    bool empty() const;
+    size_t size() const;
+    T& top();
+    T const& top() const;
+    void push(T const&);
+    void push(T&&);
+    void pop();
+    void swap(stack33&&);
+    template<class... Args> void emplace(Args&&... args);
+};
+/* Конец листинга 3.3 */
+
+
+/* Листинг 3.4 (стр 79)
+ * Опять интерфейс. Собирается, пусть будет. Реализацию не делаю.
+ */
+struct empty_stack: exception
+{
+    const char* what() const noexcept;
+};
+
+template<typename T>
+class threadsafe_stack
+{
+public:
+    threadsafe_stack();
+    threadsafe_stack(const threadsafe_stack&);
+    threadsafe_stack& operator=(const threadsafe_stack&) = delete;
+    void push(T new_value);
+    shared_ptr<T> pop();
+    void pop(T& value);
+    bool empty() const;
+};
+/* Конец листинга 3.4 */
+
+
+
+/* Листинг 3.5 (стр 79) */
+struct empty_stack_35: exception
+{
+    const char* what() const throw()
+    {
+        return "Empty stack exception";
+    }
+};
+
+template<typename T>
+class threadsafe_stack_35
+{
+private:
+    stack<T> data;
+    mutable mutex m;
+public:
+    threadsafe_stack_35(){}
+    threadsafe_stack_35(const threadsafe_stack_35& other)
+    {
+        lock_guard<mutex> lock(other.m);
+        data = other.data;
+    }
+    threadsafe_stack_35& operator=(const threadsafe_stack_35&) = delete;
+    void push(T new_value)
+    {
+        lock_guard<mutex> lock(m);
+        data.push(move(new_value));
+    }
+    shared_ptr<T> pop()
+    {
+        lock_guard<mutex> lock(m);
+        if (data.empty()) throw empty_stack_35();
+        shared_ptr<T> const res(make_shared<T>(data.top()));
+        data.pop();
+        return res;
+    }
+    void pop(T& value)
+    {
+        lock_guard<mutex> lock(m);
+        if (data.empty()) throw empty_stack_35();
+        value = data.top();
+        data.pop();
+    }
+    bool empty() const
+    {
+        lock_guard<mutex> lock(m);
+        return data.empty();
+    }
+};
+
+// Запуск листинга
+void run35()
+{
+    threadsafe_stack_35<int> st;
+    st.push(1);
+    st.push(3);
+    st.push(2);
+
+    int val;
+    st.pop(val);
+
+    cout << "Is stack empty? " << (st.empty() ? "yes" : "no") << endl;
+    cout << "stack.pop() == " << val << endl;
+}
+/* Конец листинга 3.5 */
 
 int main()
 {
