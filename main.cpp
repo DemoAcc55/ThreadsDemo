@@ -1,3 +1,4 @@
+#include <map>
 #include <list>
 #include <mutex>
 #include <stack>
@@ -5,16 +6,19 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <climits>
 #include <numeric>
 #include <iostream>
 #include <algorithm>
 #include <exception>
+#include <shared_mutex>
 
 using namespace std;
 
 /*
  * Примеры из книжки.
  * Для работы нужно указать флаг для компилятора "-pthread".
+ * Ещё нужно указать -std=c++17, иначе не соберётся.
  * Инструкция для Code::Blocks здесь -
  *   https://askubuntu.com/questions/568068/multithreading-in-codeblocks
  *
@@ -597,6 +601,302 @@ void run35()
     cout << "stack.pop() == " << val << endl;
 }
 /* Конец листинга 3.5 */
+
+
+
+/* Листинг 3.6 (стр 82) */
+// Реализацию класса some_big_object и метода swap(...) нам не показали,
+// поэтому функцию запуска не буду добавлять
+// добавлю только функцию do_something() в класс some_big_object - понадобится в 3.11
+class some_big_object
+{
+public:
+    void do_something()
+    {
+        cout << "some_big_object#do_something() invoked" << endl;
+    }
+};
+void swap(some_big_object& lhs, some_big_object& rhs);
+class X
+{
+private:
+    some_big_object some_detail;
+    mutex m;
+public:
+    X(some_big_object const& sd):some_detail(sd){}
+    friend void swap(X& lhs, X& rhs)
+    {
+        if (&lhs == &rhs)
+            return;
+        lock(lhs.m, rhs.m);
+        lock_guard<mutex> lock_a(lhs.m, adopt_lock);
+        lock_guard<mutex> lock_b(rhs.m, adopt_lock);
+        swap(lhs.some_detail, rhs.some_detail);
+    }
+};
+/* Конец листинга 3.6 */
+
+
+
+/* Листинг 3.8 (стр 89) (функции запуска нет) */
+class hierarchial_mutex
+{
+    mutex internal_mutex;
+    unsigned long const hierarchy_value;
+    unsigned long previous_hierarchy_value;
+    static thread_local unsigned long this_thread_hierarchy_value;
+    void check_for_hierarchy_violation()
+    {
+        if (this_thread_hierarchy_value <= hierarchy_value)
+        {
+            throw logic_error("mutex hierarchy violated");
+        }
+    }
+    void update_hierarchy_value()
+    {
+        previous_hierarchy_value = this_thread_hierarchy_value;
+        this_thread_hierarchy_value = hierarchy_value;
+    }
+public:
+    explicit hierarchial_mutex(unsigned long value):
+        hierarchy_value(value),
+        previous_hierarchy_value(0)
+    {}
+    void lock()
+    {
+        check_for_hierarchy_violation();
+        internal_mutex.lock();
+        update_hierarchy_value();
+    }
+    void unlock()
+    {
+        if (this_thread_hierarchy_value != hierarchy_value)
+            throw logic_error("mutex hierarchy violated");
+        this_thread_hierarchy_value = previous_hierarchy_value;
+        internal_mutex.unlock();
+    }
+    bool try_lock()
+    {
+        check_for_hierarchy_violation();
+        if (!internal_mutex.try_lock())
+            return false;
+        update_hierarchy_value();
+        return true;
+    }
+};
+
+thread_local unsigned long hierarchial_mutex::this_thread_hierarchy_value(ULONG_MAX);
+/* Конец листинга 3.8 */
+
+
+
+/* Листинг 3.7 (стр 87)
+ * Не работает обез листинга 3.8, поэтому идёт не по порядку
+ */
+hierarchial_mutex high_level_mutex(10000);
+hierarchial_mutex low_level_mutex(5000);
+hierarchial_mutex other_mutex(6000);
+int do_low_level_stuff()
+{
+    cout << "do_low_level_stuff() invoke (return 0)" << endl;
+    return 0;
+}
+int low_level_func()
+{
+    lock_guard<hierarchial_mutex> lk(low_level_mutex);
+    return do_low_level_stuff();
+}
+void high_level_stuff(int some_param)
+{
+    cout << "high_level_stuff(" << some_param << ") invoked" << endl;
+}
+void high_level_func()
+{
+    lock_guard<hierarchial_mutex> lk(high_level_mutex);
+    high_level_stuff(low_level_func());
+}
+void thread_a()
+{
+    high_level_func();
+}
+void do_other_stuff()
+{
+    cout << "do_other_stuff() invoked" << endl;
+}
+void other_stuff()
+{
+    high_level_func();
+    do_other_stuff();
+}
+void thread_b()
+{
+    lock_guard<hierarchial_mutex> lk(other_mutex);
+    other_stuff();
+}
+
+// Запуск листинга
+void run37()
+{
+    // падает с "mutex hierarchy violated", но в принципе работает
+    thread_a();
+    thread_b();
+}
+/* Конец листинга 3.7 */
+
+
+
+/* Листинг 3.9 (стр 91) (похож на 3.6, тоже без функции запуска) */
+class X2
+{
+private:
+    some_big_object some_detail;
+    mutex m;
+public:
+    X2(some_big_object const& sd):some_detail(sd){}
+    friend void swap(X2& lhs, X2& rhs)
+    {
+        if (&lhs == &rhs)
+            return;
+        unique_lock<mutex> lock_a(lhs.m, defer_lock);
+        unique_lock<mutex> lock_b(rhs.m, defer_lock);
+        lock(lock_a, lock_b);
+        swap(lhs.some_detail, rhs.some_detail);
+    }
+};
+/* Конец листинга 3.9 */
+
+
+
+/* Листинг 3.10 (стр 96) */
+class Y
+{
+private:
+    int some_detail;
+    mutable mutex m;
+    int get_detail() const
+    {
+        lock_guard<mutex> lock_a(m);
+        return some_detail;
+    }
+public:
+    Y(int sd):some_detail(sd){}
+    friend bool operator==(Y const& lhs, Y const& rhs)
+    {
+        if (&lhs == &rhs)
+            return true;
+        int const lhs_value = lhs.get_detail();
+        int const rhs_value = rhs.get_detail();
+        return lhs_value == rhs_value;
+    }
+};
+
+// Запуск листинга
+void run310()
+{
+    Y y1(5);
+    Y y2(5);
+    Y y3(10);
+
+    cout << "y1(5), y2(5), y3(10)" << endl;
+
+    cout << "y1 == y2 ? " << (y1 == y2) << endl;
+    cout << "y1 == y3 ? " << (y1 == y3) << endl;
+    cout << "y2 == y3 ? " << (y2 == y3) << endl;
+    cout << "y2 == y2 ? " << (y2 == y2) << endl;
+}
+/* Конец листинга 3.10 */
+
+
+
+/* Листинг 3.11 (стр 98) */
+shared_ptr<some_big_object> resource_ptr;
+mutex resource_mutex;
+
+// Запуск листинга
+void foo311()
+{
+    unique_lock<mutex> lk(resource_mutex);
+    if (!resource_ptr)
+        resource_ptr.reset(new some_big_object());
+    lk.unlock();
+    resource_ptr->do_something();
+}
+/* Конец листинга 3.11 */
+
+
+
+/* Листинг 3.12 (стр 99)
+ * Какие-то непонятные объекты, либу не нашёл
+ * Даже собирать не будем
+ */
+
+/*
+class X3
+{
+private:
+    connection_info connection_details;
+    connection_handle connection;
+    once_flag connection_init_flag;
+    void open_connection()
+    {
+        connection = connection_manager.open(connection_details);
+    }
+public:
+    X3(connection_info const& connection_details_):
+        connection_details(connection_details_)
+    {}
+    void send_data(data_packet const& data)
+    {
+        call_once(connection_init_flag, &X3::open_connection, this);
+        connection.send_data(data);
+    }
+    data_packet receive_data()
+    {
+        call_once(connection_init_flag, &X3::open_connection, this);
+        return connectin.receive_data();
+    }
+}; */
+/* Конец листинга 3.12 */
+
+
+
+/* Листинг 3.13 (стр 102) */
+class dns_entry
+{
+public:
+    dns_entry(){}
+};
+
+class dns_cache
+{
+    map<string, dns_entry> entries;
+    mutable shared_mutex entry_mutex;
+public:
+    dns_cache(){}
+    dns_entry find_entry(string const& domain) const
+    {
+        cout << "find entry(" << domain << ") invoked" << endl;
+        shared_lock<shared_mutex> lk(entry_mutex);
+        map<string, dns_entry>::const_iterator const it = entries.find(domain);
+        return (it == entries.end()) ? dns_entry() : it->second;
+    }
+    void update_or_add_entry(string const& domain, dns_entry const& dns_details)
+    {
+        cout << "update or add \"" << domain << "\"..." << endl;
+        lock_guard<shared_mutex> lk(entry_mutex);
+        entries[domain] = dns_details;
+    }
+};
+
+// Запуск листинга
+void run313()
+{
+    dns_cache dns_cache_inst;
+    dns_cache_inst.update_or_add_entry("google.com", dns_entry());
+    dns_cache_inst.update_or_add_entry("yandex.ru", dns_entry());
+    dns_cache_inst.find_entry("ya.ru");
+}
+/* Конец листинга 3.13 */
 
 int main()
 {
