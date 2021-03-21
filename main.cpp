@@ -2,6 +2,7 @@
 #include <list>
 #include <mutex>
 #include <stack>
+#include <queue>
 #include <thread>
 #include <string>
 #include <vector>
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <exception>
 #include <shared_mutex>
+#include <condition_variable>
 
 using namespace std;
 
@@ -897,6 +899,225 @@ void run313()
     dns_cache_inst.find_entry("ya.ru");
 }
 /* Конец листинга 3.13 */
+
+
+
+/* Листинг 4.1 (стр 108)
+ * Реализацию класса data_chunk нам не предложили, а там довольно много методов используется
+ * К тому же есть ещё какие-то методы без реализации
+ * Поэтому оставлю код под комментарием
+ */
+
+/*
+mutex mut;
+queue<data_chunk> data_queue;
+condition_variable data_cond;
+void data_preparation_thread()
+{
+    while (more_data_to_prepare())
+    {
+        data_chunk const data = prepare_data();
+        {
+            lock_guard<mutex> lk(mut);
+            data_queue.push(data);
+        }
+        data_cond.notify_one();
+    }
+}
+void data_processing_thread()
+{
+    while (true)
+    {
+        unique_lock<mutex> lk(mut);
+        data_cond.wait(lk, []{return !data_queue.empty();});
+        data_chunk data = data_queue.front();
+        data_queue.pop();
+        lk.unlock();
+        process(data);
+        if (is_last_chunk(data)) break;
+    }
+}
+*/
+/* Конец листинга 4.1 */
+
+
+
+/* Листинг 4.2 (стр 110)
+ * Интерфейс опять...
+ * Метода запуска, естественно, не будет
+ */
+template<class T, class Container = deque<T>>
+class queue
+{
+public:
+    explicit queue(const Container&);
+    explicit queue(Container&& = Container());
+    template<class Alloc> explicit queue(const Alloc&);
+    template<class Alloc> queue(const Container&, const Alloc&);
+    template<class Alloc> queue(Container&&, const Alloc&);
+    template<class Alloc> queue(queue&&, const Alloc&);
+    void swap(queue& q);
+    bool empty() const;
+    size_t size() const;
+    T& front();
+    const T& front() const;
+    T& back();
+    const T& back() const;
+    void push(const T& x);
+    void push(T&& x);
+    void pop();
+    template<class... Args> void emplace(Args&&... args);
+};
+/* Конец листинга 4.2 */
+
+
+
+/* Листинг 4.3 (стр 111)
+ * И снова интерфейс
+ */
+template<typename T>
+class threadsafe_queue43
+{
+public:
+    threadsafe_queue43();
+    threadsafe_queue43(const threadsafe_queue43&);
+    threadsafe_queue43& operator=(const threadsafe_queue43&) = delete;
+    void push(T new_value);
+    bool try_pop(T& value);
+    shared_ptr<T> try_pop();
+    void wait_and_pop(T& value);
+    shared_ptr<T> wait_and_pop();
+    bool empty() const;
+};
+/* Конец листинга 4.3 */
+
+
+
+/* Листинг 4.4 (стр 112) */
+template<typename T>
+class threadsafe_queue44
+{
+private:
+    mutex mut;
+    std::queue<T> data_queue;
+    condition_variable data_cond;
+public:
+    void push(T new_value)
+    {
+        lock_guard<mutex> lk(mut);
+        data_queue.push(new_value);
+        data_cond.notify_one();
+    }
+    void wait_and_pop(T& value)
+    {
+        unique_lock<mutex> lk(mut);
+        data_cond.wait(lk, [this]{return !data_queue.empty();});
+        value = data_queue.front();
+        data_queue.pop();
+    }
+};
+
+// Опять загадочный data_chunk без реализации, закомментирую
+/*
+threadsafe_queue44<data_chunk> data_queue;
+void data_preparation_thread()
+{
+    while (more_data_to_prepare())
+    {
+        data_chunk const data = prepare_data();
+        data_queue.push(data);
+    }
+}
+void data_processing_thread()
+{
+    while (true)
+    {
+        data_chunk data;
+        data_queue.wait_and_pop(data);
+        process(data);
+        if (is_last_chunk(data)) break;
+    }
+}
+*/
+/* Конец листинга 4.4 */
+
+
+
+/* Листинг 4.5 (стр 113) */
+template<typename T>
+class threadsafe_queue45
+{
+private:
+    mutable mutex mut;
+    std::queue<T> data_queue;
+    condition_variable data_cond;
+public:
+    threadsafe_queue45(){}
+    threadsafe_queue45(threadsafe_queue45 const& other)
+    {
+        lock_guard<mutex> lk(other.mut);
+        data_queue = other.data_queue;
+    }
+    void push(T new_value)
+    {
+        lock_guard<mutex> lk(mut);
+        data_queue.push(new_value);
+        data_cond.notify_one();
+    }
+    void wait_and_pop(T& value)
+    {
+        unique_lock<mutex> lk(mut);
+        data_cond.wait(lk, [this]{return !data_queue.empty();});
+        value = data_queue.front();
+        data_queue.pop();
+    }
+    shared_ptr<T> wait_and_pop()
+    {
+        unique_lock<mutex> lk(mut);
+        data_cond.wait(lk, [this]{return !data_queue.empty();});
+        shared_ptr<T> res(make_shared<T>(data_queue.front()));
+        data_queue.pop();
+        return res;
+    }
+    bool try_pop(T& value)
+    {
+        lock_guard<mutex> lk(mut);
+        if (data_queue.empty()) return false;
+        value = data_queue.front();
+        data_queue.pop();
+        return true;
+    }
+    shared_ptr<T> try_pop()
+    {
+        lock_guard<mutex> lk(mut);
+        if (data_queue.empty()) return shared_ptr<T>();
+        shared_ptr<T> res(make_shared<T>(data_queue.front()));
+        data_queue.pop();
+        return res;
+    }
+    bool empty() const
+    {
+        lock_guard<mutex> lk(mut);
+        return data_queue.empty();
+    }
+};
+
+// Запуск листинга
+void run45()
+{
+    threadsafe_queue45<int> tq;
+    tq.push(5);
+    tq.push(10);
+    tq.push(15);
+
+    cout << "Is empty? " << (tq.empty()) << endl;
+    cout << "push 5, 10, 15" << endl;
+    cout << "Is empty? " << (tq.empty()) << endl;
+    int pvar;
+    tq.try_pop(pvar);
+    cout << "try_pop(int): " << pvar << endl; // pvar == 5
+}
+/* Конец листинга 4.5 */
 
 int main()
 {
