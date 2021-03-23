@@ -9,8 +9,8 @@ IDE, но не забыть добавить флаг компилятора _-p
 
 Можно собрать и запустить скриптами (под Linux):
 ```sh
-./build.sh
-./run.sh
+./scripts/build.sh
+./scripts/run.sh
 ```
 
 Под Windows скриптов нет.
