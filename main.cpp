@@ -1268,30 +1268,257 @@ bool wait_loop()
 /* Конец листинга 4.11 */
 
 /* Листинг 4.12 (стр ) */
+template<typename T>
+list<T> sequential_quick_sort(list<T> input)
+{
+    if (input.empty()) return input;
+    list<T> result;
+    result.splice(result.begin(), input, input.begin());
+    T const& pivot = *result.begin();
+    auto divide_point = partition(input.begin(), input.end(),
+                                  [&](T const& t){return t < pivot;});
+    list<T> lower_part;
+    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+    auto new_lower(sequential_quick_sort(move(lower_part)));
+    auto new_higher(sequential_quick_sort(move(input)));
+    result.splice(result.end(), new_higher);
+    result.splice(result.begin(), new_lower);
+    return result;
+}
+
+// Запуск
+void run412()
+{
+    cout << "run412() invoked" << endl;
+    list<int> l;
+    l.push_back(3);
+    l.push_back(8);
+    l.push_back(1);
+    cout << "before sort: ";
+    for (list<int>::iterator i = l.begin(); i != l.end(); i++)
+        cout << *i << " ";
+    cout << endl;
+
+    l = sequential_quick_sort(l);
+    cout << "after sort: ";
+    for (list<int>::iterator i = l.begin(); i != l.end(); i++)
+        cout << *i << " ";
+    cout << endl;
+}
 /* Конец листинга 4.12 */
 
-/* Листинг 4.13 (стр ) */
+/* Листинг 4.13 (стр 138) */
+template<typename T>
+list<T> parallel_quick_sort(list<T> input)
+{
+    if (input.empty()) return input;
+    list<T> result;
+    result.splice(result.begin(), input, input.begin());
+    T const& pivot = *result.begin();
+    auto divide_point = partition(input.begin(), input.end(), [&](T const& t){return t < pivot;});
+    list<T> lower_part;
+    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+    future<list<T>> new_lower(async(&parallel_quick_sort<T>, move(lower_part)));
+    auto new_higher(parallel_quick_sort(move(input)));
+    result.splice(result.end(), new_higher);
+    result.splice(result.begin(), new_lower.get());
+    return result;
+}
+
+// Запуск
+void run413()
+{
+    cout << "run413() invoked" << endl;
+    list<int> l;
+    l.push_back(6);
+    l.push_back(453);
+    l.push_back(0);
+    cout << "before sort: ";
+    for (list<int>::iterator i = l.begin(); i != l.end(); i++)
+        cout << *i << " ";
+    cout << endl;
+
+    l = sequential_quick_sort(l);
+    cout << "after sort: ";
+    for (list<int>::iterator i = l.begin(); i != l.end(); i++)
+        cout << *i << " ";
+    cout << endl;
+}
 /* Конец листинга 4.13 */
 
-/* Листинг 4.14 (стр ) */
+/* Листинг 4.14 (стр 140) */
+// Чёт не собирается, ругается на type/value mismatch at arg 1 in template parameter list ...
+/*
+template<typename F, typename A>
+future<result_of<F(A&&)>::type> spawn_task(F&& f, A&& a)
+{
+    typedef result_of<F(A&&)>::type result_type;
+    packaged_task<result_type(A&&)> task(move(f));
+    future<result_type> res(task.get_future());
+    thread t(move(task), move(a));
+    t.detach();
+    return res;
+} */
 /* Конец листинга 4.14 */
 
-/* Листинг 4.15 (стр ) */
+/* Листинг 4.15 (стр 143) */
+// Никаких messaging не нашёл, естественно не собирается
+// Да и функций некоторых нет
+// Закомментирую
+/*struct card_inserted
+{
+    string account;
+};
+class atm
+{
+    messaging::receiver incoming;
+    messaging::sender bank;
+    messaging::sender interface_hardware;
+    void (atm::*state)();
+    string account;
+    string pin;
+    void waiting_for_card()
+    {
+        interface_hardware.send(display_enter_card());
+        incoming.wait().handle<card_inserted>(
+            [&](card_inserted const& msg)
+                {
+                    account = msg.account;
+                    pin = "";
+                    interface_hardware.send(display_enter_pin());
+                    state = &atm::getting_pin;
+                });
+    }
+    void getting_pin();
+public:
+    void run()
+    {
+        state = &atm::waiting_for_card;
+        try
+        {
+            for(;;) (this->*state)();
+        }
+        catch(messaging::close_queue const&){}
+    }
+};*/
 /* Конец листинга 4.15 */
 
-/* Листинг 4.16 (стр ) */
+/* Листинг 4.16 (стр 144) */
+// Опять нет типов
+/*
+void atm::getting_pin()
+{
+    incoming.wait()
+        .handle<digit_pressed>(
+            [&](digit_pressed const& msg)
+                {
+                    unsigned const pin_length = 4;
+                    pin += msg.digit;
+                    if (pin.length() == pin_length)
+                    {
+                        bank.send(verify_pin(account, pin, incoming));
+                        state = &atm::verifying_pin;
+                    }
+                })
+        .handle<clear_last_pressed>(
+            [&](clear_last_pressed const& msg)
+                {
+                    if (!pin.empty()) pin.resize(pin.length()-1);
+                })
+        .handle<cancel_pressed>(
+            [&](cancel_pressed const& msg)
+            {
+                state = &atm::done_processing;
+            });
+}*/
 /* Конец листинга 4.16 */
 
-/* Листинг 4.17 (стр ) */
+/* Листинг 4.17 (стр 147) */
+// Без функции запуска, собирается и ладно
+template<typename Func>
+future<decltype(declval<Func>()())> spawn_async(Func&& func)
+{
+    promise<decltype(declval<Func>()())> p;
+    auto res = p.get_future();
+    thread t([p = move(p), f = decay_t<Func>(func)]()
+             mutable
+             {
+                 try
+                 {
+                     p.set_value(f());
+                 }
+                 catch(...)
+                 {
+                     p.set_exception(current_exception());
+                 }
+
+             });
+    t.detach();
+    return res;
+}
 /* Конец листинга 4.17 */
 
-/* Листинг 4.18 (стр ) */
+/* Листинг 4.18 (стр 148) */
+// Опять левые типы и неизвестные функции...
+/*
+void process_login(string const& username, string const& password)
+{
+    try
+    {
+        user_id const id = backend.authenticate_user(username, password);
+        user_data const info_to_display = backend.request_current_info(id);
+        update_display(info_to_display);
+    }
+    catch(exception& e)
+    {
+        display_error(e);
+    }
+}*/
 /* Конец листинга 4.18 */
 
-/* Листинг 4.19 (стр ) */
+/* Листинг 4.19 (стр 148) */
+// То же самое, что и в 4.18, только в обёртке под async
+/*future<void> process_login(string const& username, string const& password)
+{
+    return async(launch::async, [=]()
+        {
+            try
+            {
+                user_id const id = backend.authenticate_user(username, password);
+                user_data const info_to_display = backend.request_current_info(id);
+                update_display(info_to_display);
+            }
+            catch (exception& e)
+            {
+                display_error(e);
+            }
+        });
+}*/
 /* Конец листинга 4.19 */
 
-/* Листинг 4.20 (стр ) */
+/* Листинг 4.20 (стр 149) */
+// То же самое, что и в 4.18, только в другой обёртке (а-ля цепочка)
+/*
+future<void> process_login(string const& username, string const& password)
+{
+    return spawn_async([=]()
+        {
+            return backend.authenticate_user(username, password);
+        }).then([](future<user_id> id)
+        {
+            return backend.request_current_info(id.get());
+        }).then([](future<user_data> info_to_display)
+        {
+            try
+            {
+                update_display(info_to_display.get());
+            }
+            catch (exception& e)
+            {
+                display_error(e);
+            }
+        });
+}*/
 /* Конец листинга 4.20 */
 
 /* Листинг 4.21 (стр ) */
