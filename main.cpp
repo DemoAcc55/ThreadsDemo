@@ -3,12 +3,16 @@
 #include <mutex>
 #include <stack>
 #include <queue>
+#include <deque>
+#include <chrono>
+#include <future>
 #include <thread>
 #include <string>
 #include <vector>
 #include <memory>
 #include <climits>
 #include <numeric>
+#include <utility>
 #include <iostream>
 #include <algorithm>
 #include <exception>
@@ -1118,6 +1122,198 @@ void run45()
     cout << "try_pop(int): " << pvar << endl; // pvar == 5
 }
 /* Конец листинга 4.5 */
+
+/* Листинг 4.6 (стр 117) */
+int find_the_answer_to_ltuae()
+{
+    return 123;
+}
+
+// Запуск листинга
+void run46()
+{
+    future<int> the_answer = async(find_the_answer_to_ltuae);
+    do_other_stuff();
+    cout << "The answer is " << the_answer.get() << endl;
+}
+/* Конец листинга 4.6 */
+
+/* Листинг 4.7 (стр 117) */
+// Опять интерфейсы и какие-то поля, всё в куче, ничего не понятно
+// Закомментирую
+/* struct X47
+{
+    void foo(int, string const&);
+    string bar(string const&);
+};
+X47 x47;
+auto f1 = async(&X47::foo, &x47, 42, "hello");
+auto f2 = async(&X47::bar, x47, "goodbye");
+struct Y47
+{
+    double operator()(double);
+};
+Y47 y47;
+auto f3 = async(Y47(), 3.141);
+auto f4 = async(ref(y47), 2.718);
+X47 baz(X&);
+async(baz, ref(x47));
+class move_only
+{
+public:
+    move_only();
+    move_only(move_only&&);
+    move_only(move_only const&) = delete;
+    move_only& operator=(move_only&&);
+    move_only& operator=(move_only const&) = delete;
+    void operator()();
+};
+auto f5 = async(move_only()); */
+/* Конец листинга 4.7 */
+
+/* Листинг 4.8 (стр 119) */
+// Интерфейс...
+class packaged_task48
+{
+public:
+    template<typename Callable>
+    explicit packaged_task48(Callable&& f);
+    future<string> get_future();
+    void operator()(vector<char>*, int);
+};
+/* Конец листинга 4.8 */
+
+/* Листинг 4.9 (стр 120) */
+// Собирается, но реализаций для функций не предоставили
+// Поэтому запускать не будем
+mutex m49;
+deque<packaged_task<void()>> tasks;
+bool gui_shutdown_message_received()
+{
+    return true;
+}
+void get_and_process_gui_message(){}
+void gui_thread()
+{
+    while (!gui_shutdown_message_received())
+    {
+        get_and_process_gui_message();
+        packaged_task<void()> task;
+        {
+            lock_guard<mutex> lk(m49);
+            if (tasks.empty()) continue;
+            task = move(tasks.front());
+            tasks.pop_front();
+        }
+        task();
+    }
+}
+thread gui_bg_thread(gui_thread);
+template<typename Func>
+future<void> post_task_for_gui_thread(Func f)
+{
+    packaged_task<void()> task(f);
+    future<void> res = task.get_future();
+    lock_guard<mutex> lk(m49);
+    tasks.push_back(move(task));
+    return res;
+}
+/* Конец листинга 4.9 */
+
+/* Листинг 4.10 (стр 122) */
+// Откуда connection_set?
+// Закомментирую, всё равно не собирается
+/*
+void process_connections(connection_set& connections)
+{
+    while (!done(connections))
+    {
+        for(connection_iterator
+                connection = connections.begin(), end = connections.end();
+            connection != end;
+            ++connection)
+        {
+            if (connection->has_incoming_data())
+            {
+                data_packet data = connection->incoming();
+                promise<payload_type>& p = connection->get_promise(data.id);
+                p.set_value(data.payload);
+            }
+            if (connection->has_outgoing_data())
+            {
+                outgoing_packet data = connection->top_of_outgoing_queue();
+                connection->send(data.payload);
+                data.promise.set_value(true);
+            }
+        }
+    }
+} */
+/* Конец листинга 4.10 */
+
+/* Листинг 4.11 (стр 133) */
+// Без функции запуска
+condition_variable cv411;
+bool done411;
+mutex m411;
+bool wait_loop()
+{
+    auto const timeout = chrono::steady_clock::now() + chrono::milliseconds(500);
+    unique_lock<mutex> lk(m411);
+    while (!done411)
+    {
+        if (cv411.wait_until(lk, timeout) == cv_status::timeout) break;
+    }
+    return done411;
+}
+/* Конец листинга 4.11 */
+
+/* Листинг 4.12 (стр ) */
+/* Конец листинга 4.12 */
+
+/* Листинг 4.13 (стр ) */
+/* Конец листинга 4.13 */
+
+/* Листинг 4.14 (стр ) */
+/* Конец листинга 4.14 */
+
+/* Листинг 4.15 (стр ) */
+/* Конец листинга 4.15 */
+
+/* Листинг 4.16 (стр ) */
+/* Конец листинга 4.16 */
+
+/* Листинг 4.17 (стр ) */
+/* Конец листинга 4.17 */
+
+/* Листинг 4.18 (стр ) */
+/* Конец листинга 4.18 */
+
+/* Листинг 4.19 (стр ) */
+/* Конец листинга 4.19 */
+
+/* Листинг 4.20 (стр ) */
+/* Конец листинга 4.20 */
+
+/* Листинг 4.21 (стр ) */
+/* Конец листинга 4.21 */
+
+/* Листинг 4.22 (стр ) */
+/* Конец листинга 4.22 */
+
+/* Листинг 4.23 (стр ) */
+/* Конец листинга 4.23 */
+
+/* Листинг 4.24 (стр ) */
+/* Конец листинга 4.24 */
+
+/* Листинг 4.25 (стр ) */
+/* Конец листинга 4.25 */
+
+/* Листинг 4.26 (стр ) */
+/* Конец листинга 4.26 */
+
+/* Листинг 4.27 (стр ) */
+/* Конец листинга 4.27 */
 
 int main()
 {
