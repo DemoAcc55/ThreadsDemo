@@ -1715,12 +1715,50 @@ void foo425()
 /* Конец листинга 4.25 */
 
 /* Листинг 4.26 (стр ) */
+template<typename data_source,
+         typename data_sink,
+         typename data_block,
+         typename result_block,
+         typename barrier>
+void process_data426(data_source& source, data_sink& sink)
+{
+    unsigned const concurrency = thread::hardware_concurrency();
+    unsigned const num_threads = (concurrency > 0) ? concurrency : 2;
+
+    barrier sync(num_threads);
+    vector<joining_thread> threads(num_threads);
+
+    vector<data_chunk> chunks;
+    result_block result;
+
+    for (unsigned i = 0; i < num_threads; i++)
+    {
+        threads[i] = joining_thread([&, i] {
+            while (!source.done())
+            {
+                if (!i)
+                {
+                    data_block current_block = source.get_next_data_block();
+                    chunks = divide_into_chunks(current_block, num_threads);
+                }
+                sync.arrive_and_wait();
+                result.set_chunk(i, num_threads, process(chunks[i]));
+                sync.arrive_and_wait();
+                if (!i) sink.write_data(move(result));
+            }
+        });
+    }
+}
 /* Конец листинга 4.26 */
 
 /* Листинг 4.27 (стр 160) */
-
-/*
-void process_data(data_source& source, data_sink& sink)
+// flex_barrier - не нашёл хидер с ним, хотя по идее должен быть
+template<typename data_source,
+         typename data_sink,
+         typename data_block,
+         typename result_block,
+         typename flex_barrier>
+void process_data427(data_source& source, data_sink& sink)
 {
     unsigned const concurrency = thread::hardware_concurrency();
     unsigned const num_threads = (concurrency > 0) ? concurrency : 2;
@@ -1740,7 +1778,7 @@ void process_data(data_source& source, data_sink& sink)
 
     result_block result;
 
-    experimental::flex_barrier sync(num_threads, [&] {
+    flex_barrier sync(num_threads, [&] {
         sink.write_data(move(result));
         split_source();
         return -1;
@@ -1758,7 +1796,6 @@ void process_data(data_source& source, data_sink& sink)
         });
     }
 }
-*/
 /* Конец листинга 4.27 */
 
 int main()
