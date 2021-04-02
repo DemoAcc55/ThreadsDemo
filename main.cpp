@@ -1212,7 +1212,9 @@ void gui_thread()
         task();
     }
 }
-thread gui_bg_thread(gui_thread);
+// Вот эта строчка гадость делает - этот поток висит в воздухе
+// Лучше закомментировать, всё равно не используется нигде
+// thread gui_bg_thread(gui_thread);
 template<typename Func>
 future<void> post_task_for_gui_thread(Func f)
 {
