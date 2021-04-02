@@ -833,10 +833,12 @@ void foo311()
 
 /* Листинг 3.12 (стр 99)
  * Какие-то непонятные объекты, либу не нашёл
- * Даже собирать не будем
  */
 
-/*
+template<typename connection_info,
+         typename connection_handle,
+         typename data_packet,
+         typename connection_manager>
 class X3
 {
 private:
@@ -845,7 +847,8 @@ private:
     once_flag connection_init_flag;
     void open_connection()
     {
-        connection = connection_manager.open(connection_details);
+        connection_manager cm;
+        connection = cm.open(connection_details);
     }
 public:
     X3(connection_info const& connection_details_):
@@ -859,9 +862,9 @@ public:
     data_packet receive_data()
     {
         call_once(connection_init_flag, &X3::open_connection, this);
-        return connectin.receive_data();
+        return connection.receive_data();
     }
-}; */
+};
 /* Конец листинга 3.12 */
 
 
@@ -909,10 +912,14 @@ void run313()
 /* Листинг 4.1 (стр 108)
  * Реализацию класса data_chunk нам не предложили, а там довольно много методов используется
  * К тому же есть ещё какие-то методы без реализации
- * Поэтому оставлю код под комментарием
  */
 
-/*
+class data_chunk {};
+bool more_data_to_prepare() {return false; }
+data_chunk prepare_data() { data_chunk d; return d; }
+void process(data_chunk dc) {}
+bool is_last_chunk(data_chunk) {return true; }
+
 mutex mut;
 queue<data_chunk> data_queue;
 condition_variable data_cond;
@@ -941,7 +948,6 @@ void data_processing_thread()
         if (is_last_chunk(data)) break;
     }
 }
-*/
 /* Конец листинга 4.1 */
 
 
@@ -1021,28 +1027,26 @@ public:
     }
 };
 
-// Опять загадочный data_chunk без реализации, закомментирую
-/*
-threadsafe_queue44<data_chunk> data_queue;
-void data_preparation_thread()
+// Опять загадочный data_chunk без реализации
+threadsafe_queue44<data_chunk> data_queue44;
+void data_preparation_thread44()
 {
     while (more_data_to_prepare())
     {
         data_chunk const data = prepare_data();
-        data_queue.push(data);
+        data_queue44.push(data);
     }
 }
-void data_processing_thread()
+void data_processing_thread44()
 {
     while (true)
     {
         data_chunk data;
-        data_queue.wait_and_pop(data);
+        data_queue44.wait_and_pop(data);
         process(data);
         if (is_last_chunk(data)) break;
     }
 }
-*/
 /* Конец листинга 4.4 */
 
 
@@ -1140,24 +1144,23 @@ void run46()
 
 /* Листинг 4.7 (стр 117) */
 // Опять интерфейсы и какие-то поля, всё в куче, ничего не понятно
-// Закомментирую
-/* struct X47
+struct X47
 {
-    void foo(int, string const&);
-    string bar(string const&);
+    void foo(int, string const&) {}
+    string bar(string const&) { return ""; }
 };
 X47 x47;
 auto f1 = async(&X47::foo, &x47, 42, "hello");
 auto f2 = async(&X47::bar, x47, "goodbye");
 struct Y47
 {
-    double operator()(double);
+    double operator()(double) {return 0.0;}
 };
 Y47 y47;
 auto f3 = async(Y47(), 3.141);
 auto f4 = async(ref(y47), 2.718);
 X47 baz(X&);
-async(baz, ref(x47));
+// async(baz, ref(x47));
 class move_only
 {
 public:
@@ -1168,7 +1171,8 @@ public:
     move_only& operator=(move_only const&) = delete;
     void operator()();
 };
-auto f5 = async(move_only()); */
+// Требует реализации move_only...
+// auto f5 = async(move_only());
 /* Конец листинга 4.7 */
 
 /* Листинг 4.8 (стр 119) */
@@ -1222,8 +1226,11 @@ future<void> post_task_for_gui_thread(Func f)
 
 /* Листинг 4.10 (стр 122) */
 // Откуда connection_set?
-// Закомментирую, всё равно не собирается
-/*
+template<typename connection_set,
+         typename connection_iterator,
+         typename data_packet,
+         typename payload_type,
+         typename outgoing_packet>
 void process_connections(connection_set& connections)
 {
     while (!done(connections))
@@ -1247,7 +1254,7 @@ void process_connections(connection_set& connections)
             }
         }
     }
-} */
+}
 /* Конец листинга 4.10 */
 
 /* Листинг 4.11 (стр 133) */
@@ -1358,34 +1365,34 @@ future<result_of<F(A&&)>::type> spawn_task(F&& f, A&& a)
     thread t(move(task), move(a));
     t.detach();
     return res;
-} */
+}*/
 /* Конец листинга 4.14 */
 
 /* Листинг 4.15 (стр 143) */
-// Никаких messaging не нашёл, естественно не собирается
+// Никаких messaging не нашёл
 // Да и функций некоторых нет
-// Закомментирую
-/*struct card_inserted
+struct card_inserted
 {
     string account;
 };
+template<typename close_queue, typename sender, typename receiver, typename card_inserted>
 class atm
 {
-    messaging::receiver incoming;
-    messaging::sender bank;
-    messaging::sender interface_hardware;
+    receiver incoming;
+    sender bank;
+    sender interface_hardware;
     void (atm::*state)();
     string account;
     string pin;
     void waiting_for_card()
     {
-        interface_hardware.send(display_enter_card());
-        incoming.wait().handle<card_inserted>(
+        // interface_hardware.send(display_enter_card());
+        incoming.wait().handle(
             [&](card_inserted const& msg)
                 {
                     account = msg.account;
                     pin = "";
-                    interface_hardware.send(display_enter_pin());
+                    // interface_hardware.send(display_enter_pin());
                     state = &atm::getting_pin;
                 });
     }
@@ -1398,9 +1405,9 @@ public:
         {
             for(;;) (this->*state)();
         }
-        catch(messaging::close_queue const&){}
+        catch(close_queue const&){}
     }
-};*/
+};
 /* Конец листинга 4.15 */
 
 /* Листинг 4.16 (стр 144) */
@@ -1460,51 +1467,56 @@ future<decltype(declval<Func>()())> spawn_async(Func&& func)
 
 /* Листинг 4.18 (стр 148) */
 // Опять левые типы и неизвестные функции...
-/*
+void display_error418(exception& e) {}
+template<typename user_id, typename user_data, typename backend_type>
 void process_login(string const& username, string const& password)
 {
     try
     {
+        backend_type backend;
         user_id const id = backend.authenticate_user(username, password);
         user_data const info_to_display = backend.request_current_info(id);
         update_display(info_to_display);
     }
     catch(exception& e)
     {
-        display_error(e);
+        display_error418(e);
     }
-}*/
+}
 /* Конец листинга 4.18 */
 
 /* Листинг 4.19 (стр 148) */
 // То же самое, что и в 4.18, только в обёртке под async
-/*future<void> process_login(string const& username, string const& password)
+template<typename user_id, typename user_data, typename backend_type>
+future<void> process_login(string const& username, string const& password)
 {
     return async(launch::async, [=]()
         {
             try
             {
+                backend_type backend;
                 user_id const id = backend.authenticate_user(username, password);
                 user_data const info_to_display = backend.request_current_info(id);
                 update_display(info_to_display);
             }
             catch (exception& e)
             {
-                display_error(e);
+                display_error418(e);
             }
         });
-}*/
+}
 /* Конец листинга 4.19 */
 
 /* Листинг 4.20 (стр 149) */
 // То же самое, что и в 4.18, только в другой обёртке (а-ля цепочка)
-/*
-future<void> process_login(string const& username, string const& password)
+template<typename user_id, typename user_data, typename backend_type>
+future<void> process_login420(string const& username, string const& password)
 {
+    backend_type backend;
     return spawn_async([=]()
         {
             return backend.authenticate_user(username, password);
-        }).then([](future<user_id> id)
+        }).then([&backend](future<user_id> id)
         {
             return backend.request_current_info(id.get());
         }).then([](future<user_data> info_to_display)
@@ -1515,25 +1527,191 @@ future<void> process_login(string const& username, string const& password)
             }
             catch (exception& e)
             {
-                display_error(e);
+                display_error418(e);
             }
         });
-}*/
+}
 /* Конец листинга 4.20 */
 
-/* Листинг 4.21 (стр ) */
+/* Листинг 4.21 (стр 150) */
+// То же самое что и предыдущее...
+template<typename user_id, typename user_data, typename backend_type>
+future<void> process_login421(string const& username, string const& password)
+{
+    backend_type backend;
+    return backend.async_authenticate_user(username, password)
+                .then([&backend](future<user_id> id)
+                      {
+                          return backend.async_request_current_info(id.get());
+                      })
+                .then([](future<user_data> info_to_display)
+                      {
+                          try
+                          {
+                              update_display(info_to_display.get());
+                          }
+                          catch (exception& e)
+                          {
+                              display_error418(e);
+                          }
+                      });
+}
 /* Конец листинга 4.21 */
 
-/* Листинг 4.22 (стр ) */
+/* Листинг 4.22 (стр 151) */
+// Насыпал шаблонов чтобы собиралось
+// Естественно, функции запуска не будет
+template<typename FinalResult,
+         typename MyData,
+         typename ChunkResult,
+         typename Chunk>
+future<FinalResult> process_data(vector<MyData>& vec,
+                                 Chunk process_chunk,
+                                 size_t const c_size)
+{
+    size_t const chunk_size = c_size;
+    vector<future<ChunkResult>> results;
+    for (auto begin = vec.begin(), end = vec.end(); begin != end;)
+    {
+        size_t const remaining_size = end - begin;
+        size_t const this_chunk_size = min(remaining_size, chunk_size);
+        results.push_back(async(process_chunk, begin, begin + this_chunk_size));
+        begin += this_chunk_size;
+    }
+    return async([all_results = move(results)]()
+                 {
+                     vector<ChunkResult> v;
+                     v.reserve(all_results.size());
+                     for (auto& f: all_results)
+                         v.push_back(f.get());
+                     return gather_results(v);
+                 });
+}
 /* Конец листинга 4.22 */
 
-/* Листинг 4.23 (стр ) */
+/* Листинг 4.23 (стр 152) */
+// Комментарий тот же, что и в 4.22
+template<typename FinalResult,
+         typename MyData,
+         typename Chunk,
+         typename ChunkResult>
+future<FinalResult> process_data423(vector<MyData>& vec,
+                                    size_t const c_size,
+                                    Chunk process_chunk)
+{
+    size_t const chunk_size = c_size;
+    vector<future<ChunkResult>> results;
+    for (auto begin = vec.begin(), end = vec.end(); begin != end;)
+    {
+        size_t const remaining_size = end - begin;
+        size_t const this_chunk_size = min(remaining_size, chunk_size);
+        results.push_back(
+            spawn_async(process_chunk, begin, begin + this_chunk_size));
+        begin += this_chunk_size;
+    }
+    return when_all(results.begin(), results.end())
+               .then([](future<vector<future<ChunkResult>>> ready_results)
+                     {
+                         vector<future<ChunkResult>> all_results = ready_results.get();
+                         vector<ChunkResult> v;
+                         v.reserve(all_results.size());
+                         for (auto& f : all_results)
+                             v.push_back(f.get());
+                         return gather_results(v);
+                     });
+}
 /* Конец листинга 4.23 */
 
-/* Листинг 4.24 (стр ) */
+/* Листинг 4.24 (стр 153) */
+// Опять без функции запуска, собирается и ладно
+
+template<typename T>
+struct when_any_result {};
+
+template<typename FinalResult, typename MyData>
+future<FinalResult> find_and_process_value(vector<MyData>& data)
+{
+    unsigned const concurrency = thread::hardware_concurrency();
+    unsigned const num_tasks = (concurrency > 0) ? concurrency : 2;
+    vector<future<MyData*>> results;
+    auto const chunk_size = (data.size() + num_tasks - 1) / num_tasks;
+    auto chunk_begin = data.begin();
+    shared_ptr<atomic<bool>> done_flag = make_shared<atomic<bool>>(false);
+    for (unsigned i = 0; i < num_tasks; ++i)
+    {
+        auto chunk_end = (i < (num_tasks - 1)) ? chunk_begin + chunk_size : data.end();
+        results.push_back(spawn_async([=]
+                {
+                    for (auto entry = chunk_begin; !*done_flag && entry != chunk_end; ++entry)
+                    {
+                        if (matches_find_criteria(*entry))
+                        {
+                            *done_flag = true;
+                            return &*entry;
+                        }
+                    }
+                    return (MyData*) nullptr;
+                }));
+        chunk_begin = chunk_end;
+    }
+    shared_ptr<promise<FinalResult>> final_result = make_shared<promise<FinalResult>>();
+    struct DoneCheck {
+        shared_ptr<promise<FinalResult>> final_result;
+
+        DoneCheck(shared_ptr<promise<FinalResult>> final_result_) :
+            final_result(move(final_result_)){}\
+
+        void operator()(future<when_any_result<vector<future<MyData*>>>> results_param)
+        {
+            auto results = results_param.get();
+            MyData* const ready_result = results.futures[results.index].get();
+            if (ready_result) final_result->set_value(process_found_value(*ready_result));
+            else
+            {
+                results.futures.erase(results.futures.begin() + results.index);
+                if (!results.futures.empty())
+                {
+                    when_any(results.futures.begin(), results.futures.end())
+                        .then(move(*this));
+                }
+                else
+                {
+                    final_result->set_exception(make_exception_ptr(runtime_error("Not found")));
+                }
+            }
+        }
+    };
+
+    when_any(results.begin(), results.end())
+        .then(DoneCheck(final_result));
+    return final_result->get_future();
+}
 /* Конец листинга 4.24 */
 
-/* Листинг 4.25 (стр ) */
+/* Листинг 4.25 (стр 156) */
+// Без функции запуска
+void make_data(const unsigned int& i) {}
+void do_more_stuff();
+
+template<typename latch, typename my_data>
+void foo425()
+{
+    unsigned const thread_count = 4;
+    latch done(thread_count);
+    my_data data[thread_count];
+    vector<future<void>> threads;
+    for (unsigned i = 0; i < thread_count; ++i)
+    {
+        threads.push_back(async(launch::async, [&, i]
+            {
+                data[i] = make_data(i);
+                done.count_down();
+                do_more_stuff();
+            }));
+    }
+    done.wait();
+    process_data(data, thread_count);
+}
 /* Конец листинга 4.25 */
 
 /* Листинг 4.26 (стр ) */
