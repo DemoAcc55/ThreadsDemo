@@ -50,6 +50,7 @@ void run()
 
 
 /* Листинг 2.1 (стр 47) */
+// Функция, выводит числа в консоль
 void do_something(unsigned& j_)
 {
     if (j_ % 100000 == 0) cout << "Value: " << j_ << endl;
@@ -95,7 +96,9 @@ void do_something_in_current_thread()
 void f22()
 {
     int some_local_state = 0;
+    // Создаём новый объект
     func my_func(some_local_state);
+    // Создаём поток
     thread t(my_func);
     // Далее джойним поток, чтобы он выполнился
     try
@@ -133,6 +136,7 @@ public:
 void f23()
 {
     int some_local_state = 0;
+    // Аналогично f22()
     func my_func(some_local_state);
     thread t(my_func);
     // Создаём экземпляр класса thread_guard,
@@ -145,6 +149,7 @@ void f23()
 
 
 /* Листинг 2.4 (стр 52) */
+// Функции и объекты-заглушки
 enum cmd
 {
     open_new_document,
@@ -195,6 +200,7 @@ void process_user_input(user_command cmd)
 // Запуск листинга
 void edit_document(string const& filename)
 {
+    // Тут нам и пригодятся заглушки
     cout << "edit_document(" << filename << ") invoked" << endl;
     open_document_and_display_gui(filename);
     while (!done_editing())
@@ -217,6 +223,7 @@ void edit_document(string const& filename)
 
 
 /* Листинг 2.5 (стр 56) */
+// Две функции для двух разных потоков, демонстрация
 void some_function()
 {
     cout << "some_function() invoked" << endl;
@@ -250,6 +257,8 @@ void run25()
 
 
 /* Листинг 2.6 (стр 57) */
+// Оболочка для thread
+// При удалении джойнит поток
 class scoped_thread
 {
     thread t;
@@ -271,14 +280,18 @@ public:
 void f26()
 {
     int some_local_state;
+    // Создаём инстанс оболочки
     scoped_thread t{thread(func(some_local_state))};
+    // Что-то делаем, а дальше функция завершается
     do_something_in_current_thread();
+    // Где-то тут вызывается деструктор и джойнит поток
 }
 /* Конец листинга 2.6 */
 
 
 
 /* Листинг 2.7 (стр 58) */
+// Описание есть в книжке, весь класс оттуда
 class joining_thread
 {
     thread t;
@@ -350,13 +363,16 @@ void run27()
 
 
 /* Листинг 2.8 (стр 59) */
+// Функция, чёт делает
 void do_work(unsigned id)
 {
     cout << "do_work(" << id << ") invoked" << endl;
 }
 
+// Запуск потока
 void f28()
 {
+    // Создаём массив потоков, потом в цикле вызываем
     vector<thread> threads;
     for (unsigned i = 0; i < 20; ++i)
     {
@@ -370,6 +386,7 @@ void f28()
 
 
 /* Листинг 2.9 (стр 60) */
+// Описание опять же в книжке, но я так и не понял до конца, чё этот блок кода делает
 template<typename Iterator, typename T>
 struct accumulate_block
 {
@@ -419,17 +436,20 @@ void run29()
 
 
 /* Листинг 3.1 (стр 71) */
+// Демонстрация мутексов, нужны для синхронизации объектов, можно ставить лок
 list<int> some_list;
 mutex some_mutex;
 
 void add_to_list(int new_value)
 {
+    // Вот тут лок ставится
     lock_guard<mutex> guard(some_mutex);
     some_list.push_back(new_value);
 }
 
 bool list_contains(int value_to_find)
 {
+    // Вот тут лок ставится
     lock_guard<mutex> guard(some_mutex);
     return find(some_list.begin(), some_list.end(), value_to_find) != some_list.end();
 }
@@ -449,6 +469,7 @@ void run31()
 
 
 /* Листинг 3.2 (стр 72) */
+// Опять синхронизация в другой обёртке
 class some_data
 {
     int a;
@@ -469,6 +490,7 @@ public:
     template<typename Function>
     void process_data(Function func)
     {
+        // Вот тут лок ставится
         lock_guard<mutex> l(m);
         func(data);
     }
@@ -551,6 +573,8 @@ struct empty_stack_35: exception
     }
 };
 
+// Название говорит само за себя - потокобезопасный стэк
+// Лочим всё что можно когда изменяем данные
 template<typename T>
 class threadsafe_stack_35
 {
@@ -561,12 +585,14 @@ public:
     threadsafe_stack_35(){}
     threadsafe_stack_35(const threadsafe_stack_35& other)
     {
+        // Вот тут лок ставится
         lock_guard<mutex> lock(other.m);
         data = other.data;
     }
     threadsafe_stack_35& operator=(const threadsafe_stack_35&) = delete;
     void push(T new_value)
     {
+        // Вот тут лок ставится
         lock_guard<mutex> lock(m);
         data.push(move(new_value));
     }
@@ -645,6 +671,7 @@ public:
 
 
 /* Листинг 3.8 (стр 89) (функции запуска нет) */
+// Какой-то хитровыделанный мутекс с иерархией
 class hierarchial_mutex
 {
     mutex internal_mutex;
@@ -699,6 +726,7 @@ thread_local unsigned long hierarchial_mutex::this_thread_hierarchy_value(ULONG_
 /* Листинг 3.7 (стр 87)
  * Не работает обез листинга 3.8, поэтому идёт не по порядку
  */
+// Собственно демка предыдущего листинга
 hierarchial_mutex high_level_mutex(10000);
 hierarchial_mutex low_level_mutex(5000);
 hierarchial_mutex other_mutex(6000);
@@ -752,6 +780,7 @@ void run37()
 
 
 /* Листинг 3.9 (стр 91) (похож на 3.6, тоже без функции запуска) */
+// Какой-то мутный объект, опять с локами, есть функция свапа объектов (зачем?)
 class X2
 {
 private:
@@ -774,6 +803,8 @@ public:
 
 
 /* Листинг 3.10 (стр 96) */
+// Просто класс, ничего особенного не происходит
+// Опять мутексы и локи, ещё перегружен оператор сравнения (там неявно мутексы используются)
 class Y
 {
 private:
@@ -815,6 +846,7 @@ void run310()
 
 
 /* Листинг 3.11 (стр 98) */
+// Загадочный shared_ptr, гугл про него что-то знает...
 shared_ptr<some_big_object> resource_ptr;
 mutex resource_mutex;
 
@@ -834,7 +866,7 @@ void foo311()
 /* Листинг 3.12 (стр 99)
  * Какие-то непонятные объекты, либу не нашёл
  */
-
+// Какой-то менеджер соединений с передачей/получением данных
 template<typename connection_info,
          typename connection_handle,
          typename data_packet,
@@ -876,6 +908,7 @@ public:
     dns_entry(){}
 };
 
+// Пример реализации кэша (не обязательно DNS, по факту вообще любой объект можно использовать)
 class dns_cache
 {
     map<string, dns_entry> entries;
@@ -914,12 +947,14 @@ void run313()
  * К тому же есть ещё какие-то методы без реализации
  */
 
+// Заглушки
 class data_chunk {};
 bool more_data_to_prepare() {return false; }
 data_chunk prepare_data() { data_chunk d; return d; }
 void process(data_chunk dc) {}
 bool is_last_chunk(data_chunk) {return true; }
 
+// Потокобезопасная обработка данных с локами
 mutex mut;
 queue<data_chunk> data_queue;
 condition_variable data_cond;
@@ -1052,6 +1087,7 @@ void data_processing_thread44()
 
 
 /* Листинг 4.5 (стр 113) */
+// Потокобезопасная очередь, похожа на стэк
 template<typename T>
 class threadsafe_queue45
 {
@@ -1128,6 +1164,7 @@ void run45()
 /* Конец листинга 4.5 */
 
 /* Листинг 4.6 (стр 117) */
+// Пример работы с future task (как я понял, это типа запланированные операции, ленивое выполнение и всё такое)
 int find_the_answer_to_ltuae()
 {
     return 123;
@@ -1228,6 +1265,7 @@ future<void> post_task_for_gui_thread(Func f)
 
 /* Листинг 4.10 (стр 122) */
 // Откуда connection_set?
+// Обработка соединений с promise
 template<typename connection_set,
          typename connection_iterator,
          typename data_packet,
@@ -1277,6 +1315,7 @@ bool wait_loop()
 /* Конец листинга 4.11 */
 
 /* Листинг 4.12 (стр ) */
+// Быстрая сортировка в один поток
 template<typename T>
 list<T> sequential_quick_sort(list<T> input)
 {
@@ -1317,6 +1356,7 @@ void run412()
 /* Конец листинга 4.12 */
 
 /* Листинг 4.13 (стр 138) */
+// Многопоточная быстрая сортировка с future
 template<typename T>
 list<T> parallel_quick_sort(list<T> input)
 {
@@ -1373,6 +1413,9 @@ future<result_of<F(A&&)>::type> spawn_task(F&& f, A&& a)
 /* Листинг 4.15 (стр 143) */
 // Никаких messaging не нашёл
 // Да и функций некоторых нет
+// Тут пример реализации интерфейса банкомата, а-ля listener-ы
+// В следующих листингах эта тема развивается, но там всё аналогично за исключением
+//  каких-либо дополнений, демонстраций синтаксиса и лямбда-функций
 struct card_inserted
 {
     string account;
@@ -1563,6 +1606,7 @@ future<void> process_login421(string const& username, string const& password)
 /* Листинг 4.22 (стр 151) */
 // Насыпал шаблонов чтобы собиралось
 // Естественно, функции запуска не будет
+// Асинхронная обработка больших данных, поделенных на части (чанки)
 template<typename FinalResult,
          typename MyData,
          typename ChunkResult,
@@ -1630,6 +1674,8 @@ future<FinalResult> process_data423(vector<MyData>& vec,
 template<typename T>
 struct when_any_result {};
 
+// Тут наши полномочия всё
+// Что тут происходит, я не понимаю
 template<typename FinalResult, typename MyData>
 future<FinalResult> find_and_process_value(vector<MyData>& data)
 {
